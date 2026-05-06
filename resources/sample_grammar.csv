@@ -1,0 +1,45 @@
+tag_id,name
+0x00,END-OF-CONTENTS
+0x01,BOOLEAN
+0x02,INTEGER
+0x03,BIT-STRING
+0x04,OCTET-STRING
+0x05,NULL
+0x06,OBJECT-IDENTIFIER
+0x0A,ENUMERATED
+0x0C,UTF8String
+0x10,SEQUENCE
+0x11,SET
+0x12,NumericString
+0x13,PrintableString
+0x14,TeletexString
+0x15,VideotexString
+0x16,IA5String
+0x17,UTCTime
+0x18,GeneralizedTime
+0x19,GraphicString
+0x1A,VisibleString
+0x1B,GeneralString
+0x1C,UniversalString
+0x1E,BMPString
+0x4F,Application Identifier
+0x50,Card Holder Name
+0x5A,Application PAN
+0x5F20,Card Holder Verification Method
+0x5F34,CVM Method
+0x5F63,CVM Results
+0x9A,Transaction Date
+0x9B,Transaction Status
+0x9C,Transaction Type
+0x9D,Transaction Category Code
+0x9F02,Amount
+0x9F03,Amount Other
+0x9F10,Issuer Application Data
+0x9F1A,Terminal Country Code
+0x9F26,Cryptogram
+0x9F27,Cryptogram Information Data
+0x9F34,CVM Results
+0x9F35,Terminal Type
+0x9F37,Unpredictable Number
+0x95,TVR
+0xA4,File Control Information
