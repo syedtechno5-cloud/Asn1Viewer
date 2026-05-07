@@ -1,5 +1,6 @@
 """Main Application Window"""
 import math
+import sys
 from pathlib import Path
 from typing import Optional
 
@@ -7,6 +8,7 @@ from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QFileDialog, QMessageBox, QSplitter,
     QLineEdit, QPushButton, QLabel, QApplication,
+    QDialog, QDialogButtonBox,
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QEvent
 from PyQt6.QtGui import (
@@ -323,13 +325,27 @@ class ASN1ViewerMainWindow(QMainWindow):
         QShortcut(QKeySequence.StandardKey.Quit, self, self.close)
         QShortcut(QKeySequence.StandardKey.Find, self, self.search_input.setFocus)
 
+    def _logo_pixmap(self, size: int = 0) -> QPixmap:
+        """Load the Syed Technologies logo; works in dev and PyInstaller exe."""
+        if hasattr(sys, '_MEIPASS'):
+            path = Path(sys._MEIPASS) / 'resources' / 'syed-tech-logo-transparent.png'
+        else:
+            path = Path(__file__).parent.parent.parent / 'resources' / 'syed-tech-logo-transparent.png'
+        px = QPixmap(str(path))
+        if size > 0 and not px.isNull():
+            px = px.scaled(size, size, Qt.AspectRatioMode.KeepAspectRatio,
+                           Qt.TransformationMode.SmoothTransformation)
+        return px
+
     def _create_icon(self):
-        pixmap = QPixmap(64, 64)
-        pixmap.fill(QColor(100, 150, 200))
-        p = QPainter(pixmap)
-        p.drawText(10, 40, "ASN1")
-        p.end()
-        return QIcon(pixmap)
+        px = self._logo_pixmap(56)
+        canvas = QPixmap(64, 64)
+        canvas.fill(QColor(0, 0, 0))
+        if not px.isNull():
+            p = QPainter(canvas)
+            p.drawPixmap((64 - px.width()) // 2, (64 - px.height()) // 2, px)
+            p.end()
+        return QIcon(canvas)
 
     # ------------------------------------------------------------------ #
     # File loading                                                         #
@@ -509,16 +525,45 @@ class ASN1ViewerMainWindow(QMainWindow):
     # ------------------------------------------------------------------ #
 
     def _on_about(self):
-        QMessageBox.information(
-            self, "About ASN.1 Viewer",
-            "ASN.1 Viewer v1.0.0\n\n"
-            "A cross-platform BER/DER ASN.1 file decoder with GUI.\n\n"
-            "Features:\n"
-            "• Hierarchical tree view of ASN.1 structure\n"
-            "• Synchronized hex viewer with byte highlighting\n"
-            "• Grammar file support for human-readable tag names\n"
-            "• Multiple export formats (Text, XML, JSON)\n"
-            "• Search and filter capabilities\n\n"
-            "© 2024 Syed Technologies\n\n"
-            "  www.syed-technologies.com"
+        dlg = QDialog(self)
+        dlg.setWindowTitle("About ASN.1 Viewer")
+        dlg.setFixedWidth(360)
+
+        layout = QVBoxLayout(dlg)
+        layout.setSpacing(12)
+        layout.setContentsMargins(24, 24, 24, 16)
+
+        # Logo
+        logo_label = QLabel()
+        px = self._logo_pixmap(100)
+        if not px.isNull():
+            logo_label.setPixmap(px)
+        logo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        logo_label.setStyleSheet("background-color: black; padding: 8px; border-radius: 6px;")
+        layout.addWidget(logo_label)
+
+        # Text
+        text = QLabel(
+            "<div style='text-align:center;'>"
+            "<b>ASN.1 Viewer v1.0.0</b><br><br>"
+            "A cross-platform BER/DER ASN.1 file decoder with GUI.<br><br>"
+            "• Hierarchical tree view of ASN.1 structure<br>"
+            "• Synchronized hex viewer with TLV highlighting<br>"
+            "• Grammar file support for human-readable tag names<br>"
+            "• Multiple export formats (Text, XML, JSON)<br>"
+            "• Search and filter capabilities<br><br>"
+            "© 2025 Syed Technologies<br>"
+            "<a href='http://www.syed-technologies.com'>www.syed-technologies.com</a>"
+            "</div>"
         )
+        text.setOpenExternalLinks(True)
+        text.setWordWrap(True)
+        text.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(text)
+
+        # OK button
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok)
+        buttons.accepted.connect(dlg.accept)
+        layout.addWidget(buttons)
+
+        dlg.exec()

@@ -1,0 +1,48 @@
+name: Build Executables
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            artifact: ASN1Viewer.exe
+            output: dist/ASN1Viewer.exe
+
+          - os: ubuntu-latest
+            artifact: ASN1Viewer-linux
+            output: dist/ASN1Viewer
+
+          - os: macos-latest
+            artifact: ASN1Viewer-mac
+            output: dist/ASN1Viewer
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build executable
+        run: pyinstaller asn1_viewer.spec --clean
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.output }}
