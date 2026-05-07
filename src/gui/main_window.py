@@ -431,7 +431,7 @@ class ASN1ViewerMainWindow(QMainWindow):
 
     def _on_load_grammar(self):
         dialog = GrammarDialog(self)
-        if dialog.exec() == dialog.Accepted:
+        if dialog.exec() == QDialog.DialogCode.Accepted:
             self.grammar_manager = dialog.get_grammar_manager()
 
             if self.root_node:
