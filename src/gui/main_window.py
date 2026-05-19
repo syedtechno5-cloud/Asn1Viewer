@@ -20,11 +20,14 @@ from .tree_view import ASN1TreeWidget
 from .hex_viewer import HexViewer
 from .detail_view import DetailView
 from .grammar_dialog import GrammarDialog
+from .convert_tab import ConvertTab
+from .history_tab import HistoryTab
 from ..parser import BERDERParser
 from ..parser.asn1_types import ASN1Node, ASN1Tag
 from ..grammar import GrammarManager
 from ..export import Exporter
 from ..utils import is_large_file
+from ..utils.history_manager import HistoryManager
 
 
 # ═══════════════════════════════════════════════════════════════════════ #
@@ -32,15 +35,6 @@ from ..utils import is_large_file
 # ═══════════════════════════════════════════════════════════════════════ #
 
 class LoadingOverlay(QWidget):
-    """
-    Animated semi-transparent spinner that covers the central widget
-    whenever the application is doing heavy work.
-
-    Usage:
-        overlay.start("Parsing file…")   # show + begin animation
-        overlay.stop()                    # hide
-    """
-
     def __init__(self, parent: QWidget):
         super().__init__(parent)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
@@ -50,15 +44,10 @@ class LoadingOverlay(QWidget):
         self._angle   = 0
 
         self._timer = QTimer(self)
-        self._timer.setInterval(16)          # ~60 fps
+        self._timer.setInterval(16)
         self._timer.timeout.connect(self._tick)
 
-        # Keep our size in sync with the parent widget
         parent.installEventFilter(self)
-
-    # ------------------------------------------------------------------ #
-    # Public API                                                           #
-    # ------------------------------------------------------------------ #
 
     def start(self, message: str = "Please wait…"):
         self._message = message
@@ -67,17 +56,11 @@ class LoadingOverlay(QWidget):
         self.raise_()
         self.setVisible(True)
         self._timer.start()
-        # Process one round of events so the overlay paints before the
-        # caller blocks the main thread with synchronous work.
         QApplication.processEvents()
 
     def stop(self):
         self._timer.stop()
         self.setVisible(False)
-
-    # ------------------------------------------------------------------ #
-    # Internals                                                            #
-    # ------------------------------------------------------------------ #
 
     def _tick(self):
         self._angle = (self._angle + 5) % 360
@@ -95,22 +78,18 @@ class LoadingOverlay(QWidget):
     def paintEvent(self, event):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
-
-        # Dim background
         p.fillRect(self.rect(), QColor(20, 20, 20, 160))
 
         cx = self.width()  // 2
         cy = self.height() // 2
         outer, inner = 32, 16
 
-        # Spinner: 12 radiating line segments
         for i in range(12):
             alpha = int(40 + 215 * i / 11)
             pen = QPen(QColor(255, 255, 255, alpha))
             pen.setWidth(3)
             pen.setCapStyle(Qt.PenCapStyle.RoundCap)
             p.setPen(pen)
-
             rad = math.radians(self._angle + i * 30)
             x1 = int(cx + inner * math.sin(rad))
             y1 = int(cy - inner * math.cos(rad))
@@ -118,7 +97,6 @@ class LoadingOverlay(QWidget):
             y2 = int(cy - outer * math.cos(rad))
             p.drawLine(x1, y1, x2, y2)
 
-        # Message below the spinner
         if self._message:
             p.setPen(QColor(230, 230, 230))
             font = QFont()
@@ -130,7 +108,6 @@ class LoadingOverlay(QWidget):
                 Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop,
                 self._message,
             )
-
         p.end()
 
 
@@ -201,6 +178,11 @@ class ASN1ViewerMainWindow(QMainWindow):
         self.root_node:    Optional[ASN1Node] = None
         self.grammar_manager = GrammarManager()
         self.parse_thread:   Optional[ParseThread] = None
+        self.history = HistoryManager()
+
+        # Persistent convert dialog (state preserved across opens)
+        self._convert_tab: Optional[ConvertTab] = None
+        self._convert_dlg: Optional[QDialog]    = None
 
         self._create_ui()
         self._create_menus()
@@ -218,7 +200,7 @@ class ASN1ViewerMainWindow(QMainWindow):
 
         main_layout = QVBoxLayout(central_widget)
 
-        # Toolbar
+        # ── Toolbar ──────────────────────────────────────────────────── #
         toolbar_layout = QHBoxLayout()
 
         self.open_btn = QPushButton("Open File")
@@ -258,7 +240,7 @@ class ASN1ViewerMainWindow(QMainWindow):
         toolbar_layout.addStretch()
         main_layout.addLayout(toolbar_layout)
 
-        # Main splitter
+        # ── Main splitter ─────────────────────────────────────────────── #
         splitter = QSplitter(Qt.Orientation.Horizontal)
 
         self.tree_widget = ASN1TreeWidget()
@@ -266,13 +248,10 @@ class ASN1ViewerMainWindow(QMainWindow):
         splitter.addWidget(self.tree_widget)
 
         right_splitter = QSplitter(Qt.Orientation.Vertical)
-
         self.hex_viewer = HexViewer()
         right_splitter.insertWidget(0, self.hex_viewer)
-
         self.detail_view = DetailView()
         right_splitter.addWidget(self.detail_view)
-
         right_splitter.setStretchFactor(0, 1)
         right_splitter.setStretchFactor(1, 1)
 
@@ -288,6 +267,7 @@ class ASN1ViewerMainWindow(QMainWindow):
     def _create_menus(self):
         menubar = self.menuBar()
 
+        # ── File ─────────────────────────────────────────────────────── #
         file_menu = menubar.addMenu("&File")
 
         open_action = QAction("&Open File...", self)
@@ -296,10 +276,10 @@ class ASN1ViewerMainWindow(QMainWindow):
 
         file_menu.addSeparator()
 
-        for label, slot, _ in (
-            ("Export as &Text...",  self._on_export_text, None),
-            ("Export as &XML...",   self._on_export_xml,  None),
-            ("Export as &JSON...",  self._on_export_json, None),
+        for label, slot in (
+            ("Export as &Text...",  self._on_export_text),
+            ("Export as &XML...",   self._on_export_xml),
+            ("Export as &JSON...",  self._on_export_json),
         ):
             act = QAction(label, self)
             act.triggered.connect(slot)
@@ -310,11 +290,24 @@ class ASN1ViewerMainWindow(QMainWindow):
         exit_action.triggered.connect(self.close)
         file_menu.addAction(exit_action)
 
+        # ── Tools ────────────────────────────────────────────────────── #
         tools_menu = menubar.addMenu("&Tools")
+
         grammar_action = QAction("Load &Grammar...", self)
         grammar_action.triggered.connect(self._on_load_grammar)
         tools_menu.addAction(grammar_action)
 
+        tools_menu.addSeparator()
+
+        convert_action = QAction("&Convert / Extract Tags...", self)
+        convert_action.triggered.connect(self._show_convert_dialog)
+        tools_menu.addAction(convert_action)
+
+        history_action = QAction("File &History...", self)
+        history_action.triggered.connect(self._show_history_dialog)
+        tools_menu.addAction(history_action)
+
+        # ── Help ─────────────────────────────────────────────────────── #
         help_menu = menubar.addMenu("&Help")
         about_action = QAction("&About", self)
         about_action.triggered.connect(self._on_about)
@@ -325,27 +318,75 @@ class ASN1ViewerMainWindow(QMainWindow):
         QShortcut(QKeySequence.StandardKey.Quit, self, self.close)
         QShortcut(QKeySequence.StandardKey.Find, self, self.search_input.setFocus)
 
-    def _logo_pixmap(self, size: int = 0) -> QPixmap:
-        """Load the Syed Technologies logo; works in dev and PyInstaller exe."""
-        if hasattr(sys, '_MEIPASS'):
-            path = Path(sys._MEIPASS) / 'resources' / 'syed-tech-logo-transparent.png'
-        else:
-            path = Path(__file__).parent.parent.parent / 'resources' / 'syed-tech-logo-transparent.png'
-        px = QPixmap(str(path))
-        if size > 0 and not px.isNull():
-            px = px.scaled(size, size, Qt.AspectRatioMode.KeepAspectRatio,
-                           Qt.TransformationMode.SmoothTransformation)
-        return px
+    # ------------------------------------------------------------------ #
+    # Convert dialog (persistent, non-modal)                              #
+    # ------------------------------------------------------------------ #
 
-    def _create_icon(self):
-        px = self._logo_pixmap(56)
-        canvas = QPixmap(64, 64)
-        canvas.fill(QColor(0, 0, 0))
-        if not px.isNull():
-            p = QPainter(canvas)
-            p.drawPixmap((64 - px.width()) // 2, (64 - px.height()) // 2, px)
-            p.end()
-        return QIcon(canvas)
+    def _show_convert_dialog(self):
+        if self._convert_dlg is None:
+            self._convert_tab = ConvertTab()
+            self._convert_tab.file_used.connect(self._on_file_used)
+
+            self._convert_dlg = QDialog(self)
+            self._convert_dlg.setWindowTitle("Convert / Extract Tags")
+            self._convert_dlg.setMinimumSize(820, 680)
+            # Make it a proper independent window (not a sheet / always-on-top dialog)
+            self._convert_dlg.setWindowFlags(
+                Qt.WindowType.Window |
+                Qt.WindowType.WindowCloseButtonHint |
+                Qt.WindowType.WindowMaximizeButtonHint |
+                Qt.WindowType.WindowMinimizeButtonHint
+            )
+            layout = QVBoxLayout(self._convert_dlg)
+            layout.setContentsMargins(0, 0, 0, 0)
+            layout.addWidget(self._convert_tab)
+
+        # Always sync the viewer's current file into the convert dialog
+        if self.current_file and self._convert_tab:
+            self._convert_tab.load_data_file(self.current_file)
+
+        self._convert_dlg.show()
+        self._convert_dlg.raise_()
+        self._convert_dlg.activateWindow()
+
+    def _open_tags_in_convert(self, path: str):
+        self._show_convert_dialog()
+        if self._convert_tab:
+            self._convert_tab.load_tags_file(path)
+
+    # ------------------------------------------------------------------ #
+    # History dialog (modal, fresh each time)                             #
+    # ------------------------------------------------------------------ #
+
+    def _show_history_dialog(self):
+        dlg = QDialog(self)
+        dlg.setWindowTitle("File History")
+        dlg.setMinimumSize(820, 500)
+        dlg.setWindowFlags(
+            dlg.windowFlags() | Qt.WindowType.WindowMaximizeButtonHint
+        )
+
+        layout = QVBoxLayout(dlg)
+        layout.setContentsMargins(0, 0, 0, 0)
+        hist_tab = HistoryTab(self.history)
+
+        def _open_data(path):
+            dlg.accept()
+            self._load_file(path)
+
+        def _open_grammar(path):
+            dlg.accept()
+            self._load_grammar_from_path(path)
+
+        def _open_tags(path):
+            dlg.accept()
+            self._open_tags_in_convert(path)
+
+        hist_tab.open_data_file.connect(_open_data)
+        hist_tab.open_grammar_file.connect(_open_grammar)
+        hist_tab.open_tags_file.connect(_open_tags)
+        layout.addWidget(hist_tab)
+        dlg.exec()
 
     # ------------------------------------------------------------------ #
     # File loading                                                         #
@@ -379,6 +420,8 @@ class ASN1ViewerMainWindow(QMainWindow):
             self.parse_thread.error.connect(self._on_parse_error)
             self.parse_thread.start()
 
+            self.history.add('data', file_path)
+
         except Exception as e:
             self._loading.stop()
             QMessageBox.critical(self, "Error", f"Failed to open file: {str(e)}")
@@ -407,6 +450,10 @@ class ASN1ViewerMainWindow(QMainWindow):
         file_name = Path(self.current_file).name if self.current_file else "File"
         self.statusBar().showMessage(f"Loaded: {file_name}")
 
+        # Keep convert dialog in sync whenever a new file is loaded
+        if self.current_file and self._convert_tab:
+            self._convert_tab.set_data_file(self.current_file)
+
     def _on_parse_error(self, error_msg: str):
         self._loading.stop()
         QMessageBox.critical(self, "Parse Error", error_msg)
@@ -417,9 +464,7 @@ class ASN1ViewerMainWindow(QMainWindow):
     # ------------------------------------------------------------------ #
 
     def _apply_grammar(self, node: ASN1Node):
-        # Try full tag bytes first (handles multi-byte APPLICATION tags like 0x5F20)
         name = self.grammar_manager.get_name_by_hex_string(node.tag.get_grammar_key())
-        # Fall back to single first byte in case grammar only lists the first byte
         if not name:
             name = self.grammar_manager.get_name_by_hex_string(
                 f"0x{node.tag.raw_byte:02X}"
@@ -434,10 +479,13 @@ class ASN1ViewerMainWindow(QMainWindow):
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self.grammar_manager = dialog.get_grammar_manager()
 
+            grammar_path = dialog.file_path_edit.text().strip()
+            if grammar_path:
+                self.history.add('grammar', grammar_path)
+
             if self.root_node:
                 self._loading.start("Applying grammar…")
                 self._apply_grammar(self.root_node)
-
                 self._loading.start("Rebuilding tree…")
                 self.tree_widget.load_asn1_tree(self.root_node)
                 self._loading.stop()
@@ -445,6 +493,33 @@ class ASN1ViewerMainWindow(QMainWindow):
             self.statusBar().showMessage(
                 f"Loaded grammar: {len(self.grammar_manager.get_all_mappings())} mappings"
             )
+
+    def _load_grammar_from_path(self, file_path: str):
+        """Load grammar directly from a file path (called from History dialog)."""
+        try:
+            self.grammar_manager = GrammarManager()
+            self.grammar_manager.load_file(file_path)
+            self.history.add('grammar', file_path)
+
+            if self.root_node:
+                self._loading.start("Applying grammar…")
+                self._apply_grammar(self.root_node)
+                self._loading.start("Rebuilding tree…")
+                self.tree_widget.load_asn1_tree(self.root_node)
+                self._loading.stop()
+
+            self.statusBar().showMessage(f"Loaded grammar: {Path(file_path).name}")
+        except Exception as e:
+            QMessageBox.critical(self, "Grammar Error",
+                                 f"Failed to load grammar:\n{str(e)}")
+
+    # ------------------------------------------------------------------ #
+    # History integration                                                  #
+    # ------------------------------------------------------------------ #
+
+    def _on_file_used(self, category: str, file_path: str):
+        """Called by ConvertTab when it uses a file — persist to history."""
+        self.history.add(category, file_path)
 
     # ------------------------------------------------------------------ #
     # Node selection                                                       #
@@ -521,19 +596,39 @@ class ASN1ViewerMainWindow(QMainWindow):
                 QMessageBox.critical(self, "Export Error", f"Failed to export: {str(e)}")
 
     # ------------------------------------------------------------------ #
-    # About                                                                #
+    # Icon / About                                                         #
     # ------------------------------------------------------------------ #
+
+    def _logo_pixmap(self, size: int = 0) -> QPixmap:
+        if hasattr(sys, '_MEIPASS'):
+            path = Path(sys._MEIPASS) / 'resources' / 'syed-tech-logo-transparent.png'
+        else:
+            path = Path(__file__).parent.parent.parent / 'resources' / 'syed-tech-logo-transparent.png'
+        px = QPixmap(str(path))
+        if size > 0 and not px.isNull():
+            px = px.scaled(size, size, Qt.AspectRatioMode.KeepAspectRatio,
+                           Qt.TransformationMode.SmoothTransformation)
+        return px
+
+    def _create_icon(self):
+        px = self._logo_pixmap(56)
+        canvas = QPixmap(64, 64)
+        canvas.fill(QColor(0, 0, 0))
+        if not px.isNull():
+            p = QPainter(canvas)
+            p.drawPixmap((64 - px.width()) // 2, (64 - px.height()) // 2, px)
+            p.end()
+        return QIcon(canvas)
 
     def _on_about(self):
         dlg = QDialog(self)
         dlg.setWindowTitle("About ASN.1 Viewer")
-        dlg.setFixedWidth(360)
+        dlg.setFixedWidth(380)
 
         layout = QVBoxLayout(dlg)
         layout.setSpacing(12)
         layout.setContentsMargins(24, 24, 24, 16)
 
-        # Logo
         logo_label = QLabel()
         px = self._logo_pixmap(100)
         if not px.isNull():
@@ -542,16 +637,16 @@ class ASN1ViewerMainWindow(QMainWindow):
         logo_label.setStyleSheet("background-color: black; padding: 8px; border-radius: 6px;")
         layout.addWidget(logo_label)
 
-        # Text
         text = QLabel(
             "<div style='text-align:center;'>"
-            "<b>ASN.1 Viewer v1.0.0</b><br><br>"
+            "<b>ASN.1 Viewer v1.1.0</b><br><br>"
             "A cross-platform BER/DER ASN.1 file decoder with GUI.<br><br>"
             "• Hierarchical tree view of ASN.1 structure<br>"
             "• Synchronized hex viewer with TLV highlighting<br>"
             "• Grammar file support for human-readable tag names<br>"
             "• Multiple export formats (Text, XML, JSON)<br>"
-            "• Search and filter capabilities<br><br>"
+            "• Tag-based field extraction → CSV / JSON / XML<br>"
+            "• File history across sessions<br><br>"
             "© 2025 Syed Technologies<br>"
             "<a href='http://www.syed-technologies.com'>www.syed-technologies.com</a>"
             "</div>"
@@ -561,7 +656,6 @@ class ASN1ViewerMainWindow(QMainWindow):
         text.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(text)
 
-        # OK button
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok)
         buttons.accepted.connect(dlg.accept)
         layout.addWidget(buttons)

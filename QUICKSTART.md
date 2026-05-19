@@ -1,177 +1,141 @@
-# Quick Start Guide - ASN.1 Viewer
+# Quick Start — ASN.1 Viewer v1.1.0
 
-## Installation (5 minutes)
+## 1. Install
 
-### Prerequisites
-- Python 3.8 or higher from [python.org](https://www.python.org/)
-- Internet connection for downloading packages
-
-### Step 1: Install Python Dependencies
-
-On **Windows** (Command Prompt):
-```bash
-pip install -r requirements.txt
+```powershell
+python -m pip install -r requirements.txt
 ```
 
-On **macOS/Linux** (Terminal):
-```bash
-pip install -r requirements.txt
-```
-
-### Step 2: Run the Application
-
-```bash
-python main.py
-```
-
-The ASN.1 Viewer window should open. You're ready to go!
-
-## First Steps
-
-### 1. Open an ASN.1 File
-- Click the **"Open File"** button in the toolbar
-- Select a `.der`, `.cer`, or `.asn1` file
-- The file structure will appear in the left panel as a tree
-
-### 2. Explore the Interface
-- **Left Panel**: Hierarchical tree of ASN.1 tags
-  - Click any tag to select it
-  - Hex preview shown next to each tag
-  
-- **Right Upper Panel**: Hex Viewer
-  - Shows raw bytes with offsets
-  - Highlights bytes corresponding to selected tag
-  
-- **Right Lower Panel**: Detail View
-  - Multiple tabs showing different representations
-  - Select a node to see its details
-
-### 3. Load a Grammar (Optional)
-- Click **"Load Grammar"** button
-- Click **"Create Sample Grammar"** to create a test file
-- Or use the sample grammar in `resources/sample_grammar.csv`
-- Tags will now show human-readable names
-
-### 4. Search for Tags
-- Type in the Search box to filter tags
-- Example: `0x50` or `Application` or `50`
-- Clear to see all tags again
-
-### 5. Export Results
-- Select **File → Export as Text/XML/JSON**
-- Choose a location to save
-- Your ASN.1 tree is now in the exported format
-
-## Sample Files to Try
-
-In `resources/` directory:
-- `sample_grammar.csv` - Sample tag mappings (CSV format)
-- `sample_grammar.json` - Sample tag mappings (JSON format)
-
-Create your own ASN.1 file or use any existing `.der` or `.cer` file.
-
-## Common Tasks
-
-### Task: Find a Specific Tag
-1. Click in the Search box
-2. Type the tag hex code (e.g., `0x4F`)
-3. Only matching tags shown
-4. Click tag to see details
-
-### Task: Export Entire File
-1. Open ASN.1 file
-2. Click **Export Text** button
-3. Choose filename (e.g., `output.txt`)
-4. File saved with hierarchical structure
-
-### Task: Create Custom Grammar
-1. Open a text editor
-2. Create `my_grammar.csv`:
-```
-tag_id,name
-0x4F,My Application ID
-0x50,My Card Name
-```
-3. In ASN.1 Viewer, click **Load Grammar**
-4. Browse to `my_grammar.csv`
-5. Click Load
-
-## Building Standalone Executable
-
-### Windows:
-```bash
-build_windows.bat
-```
-Creates: `dist\ASN1Viewer\ASN1Viewer.exe`
-
-### macOS/Linux:
-```bash
-chmod +x build.sh
-./build.sh
-```
-Creates: `dist/ASN1Viewer/ASN1Viewer`
-
-## Troubleshooting
-
-**"ImportError: No module named 'PyQt6'"**
-- Run: `pip install -r requirements.txt`
-- Make sure you're in the project directory
-
-**File won't open**
-- Verify it's a valid BER/DER ASN.1 file
-- Try a known-good file first
-- Check file permissions
-
-**Hex viewer shows nothing**
-- File may have unusual encoding
-- Try with a different ASN.1 file
-
-**Grammar not loaded**
-- Verify CSV/JSON file format
-- Try "Create Sample Grammar" first
-- Check file path is correct
-
-## Testing
-
-Run the test suite (optional):
-```bash
-python test_demo.py
-```
-
-This will:
-1. Create sample ASN.1 data
-2. Test the parser
-3. Test grammar loading
-4. Test export functionality
-
-## Next Steps
-
-### Learn More
-- Read [README.md](README.md) for detailed documentation
-- Explore `resources/` for sample grammars
-- Check ASN.1 specifications for tag meanings
-
-### Customize
-- Create grammar files for your specific tags
-- Extend export functionality (see README.md)
-- Add support for custom ASN.1 types
-
-### Use Cases
-- Decode X.509 certificates (`.cer` files)
-- Analyze EMV/ICC card data
-- Inspect PKCS formats
-- Reverse-engineer proprietary ASN.1 structures
-- Validate ASN.1 encoding
-
-## Support
-
-For detailed help:
-1. Check **Help → About** in application
-2. Review [README.md](README.md)
-3. Check `test_demo.py` for code examples
+That's it. No other setup required to run the GUI.
 
 ---
 
-**You're all set!** Start by opening an ASN.1 file and exploring the tree.
+## 2. Open the GUI
 
-Enjoy using ASN.1 Viewer! 🎉
+```powershell
+python main.py
+```
+
+Or run the pre-built executable:
+```
+dist\ASN1Viewer.exe
+```
+
+---
+
+## 3. View an ASN.1 file
+
+1. Click **Open File** (or `Ctrl+O`)
+2. Select any BER/DER binary — `.der`, `.cer`, `.dat`, `.bin`, etc.
+3. The left panel shows the tag tree; click a node to highlight its bytes in the hex viewer
+
+---
+
+## 4. Extract specific fields (Convert dialog)
+
+The converter lets you pull named fields out of a CDR or other structured binary and save them as CSV, JSON, or XML.
+
+**Step 1 — Create a tag definition file** (plain text, `.txt` or `.tags`):
+```
+# PATH,FieldName,DataType
+CTX:1->CTX:7->CTX:1,servedIMSI,imsi
+CTX:1->CTX:7->CTX:0,recordType,int
+CTX:1->CTX:7->CTX:8,openingTime,timestamp
+```
+
+**Step 2 — Open the Convert dialog:**
+- **Tools → Convert / Extract Tags**
+- The dialog automatically uses the file already open in the viewer
+- If no file is open yet, open one first
+
+**Step 3 — Load the tag file:**
+- Click **Browse** next to the Tag Definition File
+- Select your `.txt` or `.tags` file
+
+**Step 4 — Convert and save:**
+- Choose **CSV / JSON / XML**
+- Click **Convert** — results appear in the preview
+- Click **Save Output** to write the file
+
+> Click **? Format Help** inside the dialog for a full reference of supported types and path syntax.
+
+---
+
+## 5. Use the CLI (no GUI needed)
+
+Install the `asn1viewcli` command once:
+```powershell
+python -m pip install -e .
+```
+
+Then run it anywhere:
+```powershell
+asn1viewcli --data records.dat --tags fields.txt --format csv --output result.csv
+```
+
+Or use the standalone exe (no Python needed):
+```powershell
+dist\asn1viewcli.exe --data records.dat --tags fields.txt --format csv --output result.csv
+```
+
+See [CLI_GUIDE.md](CLI_GUIDE.md) for all options and examples.
+
+---
+
+## 6. Reopen recent files
+
+**Tools → File History** lists recently used data files, grammar files, and tag files grouped by category. Double-click any entry to reopen it.
+
+---
+
+## 7. Add human-readable tag names (Grammar)
+
+1. **Tools → Load Grammar** (or click **Load Grammar** in the toolbar)
+2. Browse for a CSV or JSON grammar file mapping tag IDs to names
+3. The tree view immediately shows the names
+
+**CSV grammar format:**
+```csv
+tag_id,name
+0x80,recordType
+0x81,servedIMSI
+0x82,servedIMEI
+```
+
+---
+
+## Common tag definition types
+
+| Use case | DataType |
+|----------|----------|
+| Integer counter | `int` |
+| IMSI / IMEI | `imsi` / `imei` |
+| Phone number | `msisdn` |
+| Date/time | `timestamp` |
+| Raw dump | `hex` |
+| Text field | `string` |
+| IP address | `ip` |
+
+---
+
+## Build standalone executables
+
+```powershell
+python -m pip install pyinstaller
+python -m PyInstaller asn1_viewer.spec --noconfirm
+```
+
+Output in `dist\`:
+- `ASN1Viewer.exe` — GUI
+- `asn1viewcli.exe` — CLI (copy to any Windows machine, no Python needed)
+
+---
+
+## Need more detail?
+
+| Guide | Contents |
+|-------|----------|
+| [README.md](README.md) | Full feature overview and architecture |
+| [INSTALLATION.md](INSTALLATION.md) | Platform-specific install, virtual envs, PATH setup |
+| [CLI_GUIDE.md](CLI_GUIDE.md) | Complete CLI reference with scripting examples |
+| [TAG_EXTRACTION.md](TAG_EXTRACTION.md) | Tag definition format, path semantics, telecom examples |

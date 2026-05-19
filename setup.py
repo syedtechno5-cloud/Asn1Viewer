@@ -36,7 +36,12 @@ setup(
     ],
     entry_points={
         "console_scripts": [
-            "asn1-viewer=src.gui.main_window:main",
+            # CLI tool — headless extraction, no Qt required
+            "asn1viewcli=src.cli.runner:main",
+        ],
+        "gui_scripts": [
+            # GUI launcher
+            "asn1viewer=main:main",
         ],
     },
     include_package_data=True,

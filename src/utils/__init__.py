@@ -3,6 +3,8 @@ import os
 from typing import List, Tuple
 from pathlib import Path
 
+from .history_manager import HistoryManager
+
 
 def format_hex_string(data: bytes, bytes_per_line: int = 16) -> str:
     """
