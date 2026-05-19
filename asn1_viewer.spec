@@ -1,8 +1,9 @@
 # -*- mode: python ; coding: utf-8 -*-
+import sys
 
-# ── Shared analysis ────────────────────────────────────────────────────────── #
+# ── Shared analysis options ────────────────────────────────────────────────── #
 
-common_kwargs = dict(
+_common = dict(
     pathex=[],
     binaries=[],
     datas=[('resources', 'resources')],
@@ -23,9 +24,9 @@ common_kwargs = dict(
     noarchive=False,
 )
 
-# ── GUI build ─────────────────────────────────────────────────────────────── #
+# ── GUI ────────────────────────────────────────────────────────────────────── #
 
-gui_a = Analysis(['main.py'], **common_kwargs)
+gui_a   = Analysis(['main.py'], **_common)
 gui_pyz = PYZ(gui_a.pure)
 
 gui_exe = EXE(
@@ -41,7 +42,7 @@ gui_exe = EXE(
     upx=True,
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=False,               # no console window for the GUI
+    console=False,
     disable_windowed_traceback=False,
     target_arch=None,
     codesign_identity=None,
@@ -49,9 +50,25 @@ gui_exe = EXE(
     icon=None,
 )
 
-# ── CLI build ─────────────────────────────────────────────────────────────── #
+# macOS: wrap the binary in a proper .app bundle
+if sys.platform == 'darwin':
+    app = BUNDLE(
+        gui_exe,
+        name='ASN1Viewer.app',
+        icon=None,
+        bundle_identifier='com.syedtechnologies.asn1viewer',
+        info_plist={
+            'CFBundleDisplayName': 'ASN.1 Viewer',
+            'CFBundleShortVersionString': '1.1.0',
+            'CFBundleVersion': '1.1.0',
+            'NSHighResolutionCapable': True,
+            'NSRequiresAquaSystemAppearance': False,
+        },
+    )
 
-cli_a = Analysis(['asn1viewcli.py'], **common_kwargs)
+# ── CLI ────────────────────────────────────────────────────────────────────── #
+
+cli_a   = Analysis(['asn1viewcli.py'], **_common)
 cli_pyz = PYZ(cli_a.pure)
 
 cli_exe = EXE(
@@ -67,7 +84,7 @@ cli_exe = EXE(
     upx=True,
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=True,                # keep console window open for CLI output
+    console=True,
     disable_windowed_traceback=False,
     target_arch=None,
     codesign_identity=None,

@@ -253,19 +253,54 @@ Asn1Viewer/
 
 ## Building Executables
 
+### Local build
+
+**Windows:**
+```powershell
+build_windows.bat
+```
+
+**macOS / Linux:**
+```bash
+chmod +x build.sh && ./build.sh
+```
+
+Both scripts install dependencies, run PyInstaller, and produce a platform zip/tar.gz ready to upload.
+
+**Manual:**
 ```powershell
 python -m pip install pyinstaller
 python -m PyInstaller asn1_viewer.spec --noconfirm
 ```
 
-Produces two files in `dist\`:
+Output in `dist\`:
 
-| File | Type | Notes |
-|------|------|-------|
-| `ASN1Viewer.exe` | GUI | No console window |
-| `asn1viewcli.exe` | CLI | Console app; fully self-contained |
+| Platform | GUI | CLI |
+|----------|-----|-----|
+| Windows | `ASN1Viewer.exe` | `asn1viewcli.exe` |
+| macOS | `ASN1Viewer.app` (bundle) | `asn1viewcli` |
+| Linux | `ASN1Viewer` | `asn1viewcli` |
 
-Both are single-file executables — no Python installation required on the target machine.
+All outputs are fully self-contained — no Python required on the target machine.
+
+### GitHub Release (automated — all three platforms at once)
+
+Push a version tag and GitHub Actions builds everything and creates the release automatically:
+
+```bash
+git tag v1.1.0
+git push origin v1.1.0
+```
+
+GitHub Actions runs on Windows, macOS, and Linux in parallel and attaches these assets to the release:
+
+| Asset | Platform |
+|-------|----------|
+| `ASN1Viewer-Windows-x64.zip` | Windows — `ASN1Viewer.exe` + `asn1viewcli.exe` |
+| `ASN1Viewer-macOS-x64.zip` | macOS — `ASN1Viewer.app` + `asn1viewcli` |
+| `ASN1Viewer-Linux-x64.tar.gz` | Linux — `ASN1Viewer` + `asn1viewcli` |
+
+Workflow files: [`.github/workflows/release.yml`](.github/workflows/release.yml) (release) · [`.github/workflows/build.yml`](.github/workflows/build.yml) (CI on every push)
 
 ---
 

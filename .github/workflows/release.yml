@@ -1,0 +1,135 @@
+name: Release
+
+# Triggers when you push a version tag, e.g.:
+#   git tag v1.1.0
+#   git push origin v1.1.0
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:          # also allows manual trigger from GitHub UI
+
+permissions:
+  contents: write             # needed to create and upload release assets
+
+jobs:
+
+  # ── Windows ────────────────────────────────────────────────────────────── #
+  build-windows:
+    name: Build — Windows
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install pyinstaller
+
+      - name: Build executables
+        run: python -m PyInstaller asn1_viewer.spec --noconfirm
+
+      - name: Package
+        run: |
+          Compress-Archive `
+            -Path dist\ASN1Viewer.exe, dist\asn1viewcli.exe `
+            -DestinationPath ASN1Viewer-Windows-x64.zip
+        shell: powershell
+
+      - name: Upload release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ASN1Viewer-Windows-x64.zip
+          generate_release_notes: true
+
+  # ── macOS ──────────────────────────────────────────────────────────────── #
+  build-macos:
+    name: Build — macOS
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install pyinstaller
+
+      - name: Build executables
+        run: python -m PyInstaller asn1_viewer.spec --noconfirm
+
+      - name: Package
+        run: |
+          # .app is a directory — zip it together with the CLI binary
+          zip -r ASN1Viewer-macOS-x64.zip \
+            dist/ASN1Viewer.app \
+            dist/asn1viewcli
+
+      - name: Upload release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ASN1Viewer-macOS-x64.zip
+          generate_release_notes: true
+
+  # ── Linux ──────────────────────────────────────────────────────────────── #
+  build-linux:
+    name: Build — Linux
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install system libraries (required for PyQt6 bundling)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y \
+            libxkbcommon-x11-0 \
+            libxcb-icccm4 \
+            libxcb-image0 \
+            libxcb-keysyms1 \
+            libxcb-randr0 \
+            libxcb-render-util0 \
+            libxcb-xinerama0 \
+            libxcb-xfixes0 \
+            libxcb-cursor0 \
+            libegl1 \
+            libgl1
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install pyinstaller
+
+      - name: Build executables
+        run: python -m PyInstaller asn1_viewer.spec --noconfirm
+
+      - name: Make executables runnable
+        run: chmod +x dist/ASN1Viewer dist/asn1viewcli
+
+      - name: Package
+        run: |
+          tar -czf ASN1Viewer-Linux-x64.tar.gz \
+            -C dist ASN1Viewer asn1viewcli
+
+      - name: Upload release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ASN1Viewer-Linux-x64.tar.gz
+          generate_release_notes: true

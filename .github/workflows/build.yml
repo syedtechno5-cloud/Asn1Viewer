@@ -1,48 +1,83 @@
-name: Build Executables
+name: CI Build
+
+# Runs on every push to main and on pull requests.
+# Verifies the executables build successfully on all three platforms.
+# Does NOT create a release — use the Release workflow (push a v* tag) for that.
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 jobs:
   build:
+    name: Build — ${{ matrix.os-label }}
+    runs-on: ${{ matrix.os }}
+
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: windows-latest
-            artifact: ASN1Viewer.exe
-            output: dist/ASN1Viewer.exe
-
-          - os: ubuntu-latest
-            artifact: ASN1Viewer-linux
-            output: dist/ASN1Viewer
-
+            os-label: Windows
           - os: macos-latest
-            artifact: ASN1Viewer-mac
-            output: dist/ASN1Viewer
-
-    runs-on: ${{ matrix.os }}
+            os-label: macOS
+          - os: ubuntu-latest
+            os-label: Linux
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: '3.11'
+
+      - name: Install system libraries (Linux only)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y \
+            libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 \
+            libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 \
+            libxcb-xinerama0 libxcb-xfixes0 libxcb-cursor0 \
+            libegl1 libgl1
 
       - name: Install dependencies
         run: |
-          pip install -r requirements.txt
-          pip install pyinstaller
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install pyinstaller
 
-      - name: Build executable
-        run: pyinstaller asn1_viewer.spec --clean
+      - name: Build executables
+        run: python -m PyInstaller asn1_viewer.spec --noconfirm
 
-      - name: Upload artifact
+      - name: Verify GUI binary exists
+        run: |
+          python -c "
+          import os, sys
+          name = 'ASN1Viewer.exe' if sys.platform == 'win32' else 'ASN1Viewer'
+          path = os.path.join('dist', name)
+          assert os.path.exists(path), f'GUI binary not found: {path}'
+          size = os.path.getsize(path)
+          print(f'GUI binary OK: {path} ({size:,} bytes)')
+          "
+
+      - name: Verify CLI binary exists
+        run: |
+          python -c "
+          import os, sys
+          name = 'asn1viewcli.exe' if sys.platform == 'win32' else 'asn1viewcli'
+          path = os.path.join('dist', name)
+          assert os.path.exists(path), f'CLI binary not found: {path}'
+          size = os.path.getsize(path)
+          print(f'CLI binary OK: {path} ({size:,} bytes)')
+          "
+
+      - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact }}
-          path: ${{ matrix.output }}
+          name: build-${{ matrix.os-label }}
+          path: dist/
+          retention-days: 7
