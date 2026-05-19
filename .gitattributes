@@ -1,2 +1,33 @@
-# Auto detect text files and perform LF normalization
+# Default: auto line-ending conversion
 * text=auto
+
+# Source files — always LF in the repo
+*.py    text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.sh    text eol=lf
+*.md    text eol=lf
+*.txt   text eol=lf
+*.json  text eol=lf
+*.csv   text eol=lf
+*.toml  text eol=lf
+*.cfg   text eol=lf
+*.spec  text eol=lf
+*.tags  text eol=lf
+
+# Windows batch files — always CRLF
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+*.ps1   text eol=crlf
+
+# Binary files — no conversion
+*.exe   binary
+*.dll   binary
+*.png   binary
+*.jpg   binary
+*.ico   binary
+*.zip   binary
+*.gz    binary
+*.dat   binary
+*.der   binary
+*.cer   binary
